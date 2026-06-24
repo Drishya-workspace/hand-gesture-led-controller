@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hand Gesture LED Controller</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&display=swap');
+
+  :root {
+    --bg: #0a0a0a;
+    --panel: #111111;
+    --border: #222222;
+    --green: #00ff88;
+    --red: #ff3355;
+    --yellow: #ffcc00;
+    --dim: #444;
+    --text: #eee;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+    gap: 20px;
+  }
+
+  h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.8rem;
+    letter-spacing: 4px;
+    color: var(--green);
+    text-shadow: 0 0 20px rgba(0,255,136,0.4);
+  }
+
+  .subtitle {
+    font-size: 0.7rem;
+    color: var(--dim);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-top: -14px;
+  }
+
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 20px;
+    width: 100%;
+    max-width: 960px;
+  }
+
+  /* Camera panel */
+  .cam-panel {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    aspect-ratio: 4/3;
+  }
+
+  #video {
+    position: absolute;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    opacity: 0;
+  }
+
+  #canvas {
+    position: absolute;
+    width: 100%; height: 100%;
+    transform: scaleX(-1);
+  }
+
+  .cam-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--panel);
+    font-size: 0.75rem;
+    color: var(--dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    z-index: 2;
+    transition: opacity 0.5s;
+  }
+
+  .cam-overlay.hidden { opacity: 0; pointer-events: none; }
+
+  /* Gesture badge */
+  .gesture-badge {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 8px 24px;
+    border-radius: 2px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.6rem;
+    letter-spacing: 3px;
+    z-index: 3;
+    transition: all 0.2s;
+    background: rgba(0,0,0,0.7);
+    border: 1px solid var(--dim);
+    color: var(--dim);
+    white-space: nowrap;
+  }
+
+  .gesture-badge.on {
+    color: var(--green);
+    border-color: var(--green);
+    box-shadow: 0 0 20px rgba(0,255,136,0.3);
+  }
+
+  .gesture-badge.off {
+    color: var(--red);
+    border-color: var(--red);
+    box-shadow: 0 0 20px rgba(255,51,85,0.3);
+  }
+
+  /* Right panel */
+  .side-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px;
+  }
+
+  .card-title {
+    font-size: 0.6rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+
+  /* LED indicator */
+  .led-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+  }
+
+  .led-bulb {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: #1a1a1a;
+    border: 2px solid var(--border);
+    position: relative;
+    transition: all 0.3s;
+  }
+
+  .led-bulb.on {
+    background: radial-gradient(circle at 40% 35%, #ffffff, #00ff88 40%, #00aa55);
+    border-color: var(--green);
+    box-shadow: 0 0 30px rgba(0,255,136,0.8), 0 0 60px rgba(0,255,136,0.4);
+  }
+
+  .led-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem;
+    letter-spacing: 3px;
+    color: var(--dim);
+    transition: color 0.3s;
+  }
+
+  .led-label.on { color: var(--green); }
+
+  /* Serial connect */
+  .connect-btn {
+    width: 100%;
+    padding: 12px;
+    background: transparent;
+    border: 1px solid var(--green);
+    color: var(--green);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+  }
+
+  .connect-btn:hover {
+    background: rgba(0,255,136,0.1);
+    box-shadow: 0 0 15px rgba(0,255,136,0.2);
+  }
+
+  .connect-btn.connected {
+    border-color: var(--green);
+    color: var(--green);
+    background: rgba(0,255,136,0.08);
+  }
+
+  .connect-btn.disconnected {
+    border-color: var(--red);
+    color: var(--red);
+  }
+
+  .connect-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* Status dot */
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.65rem;
+    color: var(--dim);
+    letter-spacing: 1px;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--dim);
+    flex-shrink: 0;
+    transition: all 0.3s;
+  }
+
+  .dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot.red   { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+
+  /* Gesture guide */
+  .gesture-guide {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .gesture-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.65rem;
+    color: var(--dim);
+  }
+
+  .gesture-icon {
+    font-size: 1.8rem;
+    width: 36px;
+    text-align: center;
+  }
+
+  .gesture-arrow {
+    color: var(--border);
+  }
+
+  .gesture-action {
+    letter-spacing: 1px;
+  }
+
+  .gesture-action.on-action  { color: var(--green); }
+  .gesture-action.off-action { color: var(--red); }
+
+  /* Log */
+  .log-box {
+    font-size: 0.6rem;
+    color: var(--dim);
+    height: 80px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 3px;
+    letter-spacing: 1px;
+  }
+
+  .log-entry { padding: 2px 0; border-bottom: 1px solid #1a1a1a; }
+  .log-entry.sent-1 { color: var(--green); }
+  .log-entry.sent-0 { color: var(--red); }
+
+  /* Start cam button */
+  .start-btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--green);
+    border: none;
+    color: #000;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+  }
+
+  .start-btn:hover { background: #00ffaa; }
+  .start-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .notice {
+    font-size: 0.6rem;
+    color: var(--dim);
+    text-align: center;
+    letter-spacing: 1px;
+    max-width: 960px;
+  }
+
+  .notice span { color: var(--yellow); }
+
+  @media (max-width: 700px) {
+    .main-grid { grid-template-columns: 1fr; }
+    h1 { font-size: 2rem; }
+  }
+</style>
+</head>
+<body>
+
+<h1>GESTURE LED CTRL</h1>
+<p class="subtitle">ESP32-C3 · Web Serial · MediaPipe</p>
+
+<div class="main-grid">
+
+  <!-- Camera -->
+  <div class="cam-panel">
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+    <div class="cam-overlay" id="camOverlay">CAMERA OFF</div>
+    <div class="gesture-badge" id="gestureBadge">WAITING...</div>
+  </div>
+
+  <!-- Side panel -->
+  <div class="side-panel">
+
+    <!-- LED status -->
+    <div class="card">
+      <div class="card-title">LED Status</div>
+      <div class="led-display">
+        <div class="led-bulb" id="ledBulb"></div>
+        <div class="led-label" id="ledLabel">OFF</div>
+      </div>
+    </div>
+
+    <!-- Serial -->
+    <div class="card">
+      <div class="card-title">ESP32 Connection</div>
+      <button class="connect-btn" id="connectBtn" onclick="toggleSerial()">
+        Connect to ESP32
+      </button>
+      <br><br>
+      <div class="status-row">
+        <div class="dot" id="serialDot"></div>
+        <span id="serialStatus">Not connected</span>
+      </div>
+    </div>
+
+    <!-- Camera start -->
+    <div class="card">
+      <div class="card-title">Camera</div>
+      <button class="start-btn" id="startBtn" onclick="startCamera()">
+        Start Camera
+      </button>
+      <br><br>
+      <div class="status-row">
+        <div class="dot" id="camDot"></div>
+        <span id="camStatus">Camera off</span>
+      </div>
+    </div>
+
+    <!-- Gesture guide -->
+    <div class="card">
+      <div class="card-title">Gestures</div>
+      <div class="gesture-guide">
+        <div class="gesture-row">
+          <div class="gesture-icon">✋</div>
+          <span class="gesture-arrow">→</span>
+          <span class="gesture-action on-action">LED ON</span>
+        </div>
+        <div class="gesture-row">
+          <div class="gesture-icon">✊</div>
+          <span class="gesture-arrow">→</span>
+          <span class="gesture-action off-action">LED OFF</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="card">
+      <div class="card-title">Serial Log</div>
+      <div class="log-box" id="logBox">
+        <div class="log-entry">// waiting for commands...</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<p class="notice">
+  Use <span>Google Chrome</span> or <span>Microsoft Edge</span> · Web Serial requires a Chromium browser
+</p>
+
+<!-- MediaPipe CDN -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+
+<script>
+  // ── State ──────────────────────────────────────────
+  let serialPort   = null;
+  let serialWriter = null;
+  let lastCmd      = null;
+  let cameraStarted = false;
+
+  // ── UI helpers ─────────────────────────────────────
+  function setLED(on) {
+    const bulb  = document.getElementById('ledBulb');
+    const label = document.getElementById('ledLabel');
+    const badge = document.getElementById('gestureBadge');
+    if (on) {
+      bulb.classList.add('on');
+      label.classList.add('on');
+      label.textContent = 'ON';
+      badge.textContent = '✋  OPEN PALM → LED ON';
+      badge.className   = 'gesture-badge on';
+    } else {
+      bulb.classList.remove('on');
+      label.classList.remove('on');
+      label.textContent = 'OFF';
+      badge.textContent = '✊  CLOSED FIST → LED OFF';
+      badge.className   = 'gesture-badge off';
+    }
+  }
+
+  function addLog(msg, cls='') {
+    const box   = document.getElementById('logBox');
+    const entry = document.createElement('div');
+    entry.className = 'log-entry ' + cls;
+    const t = new Date().toLocaleTimeString('en',{hour12:false});
+    entry.textContent = `[${t}] ${msg}`;
+    box.prepend(entry);
+    if (box.children.length > 30) box.removeChild(box.lastChild);
+  }
+
+  // ── Web Serial ─────────────────────────────────────
+  async function toggleSerial() {
+    if (serialPort) {
+      await disconnectSerial();
+    } else {
+      await connectSerial();
+    }
+  }
+
+  async function connectSerial() {
+    if (!('serial' in navigator)) {
+      alert('Web Serial not supported!\nUse Google Chrome or Microsoft Edge.');
+      return;
+    }
+    try {
+      serialPort = await navigator.serial.requestPort();
+      await serialPort.open({ baudRate: 9600 });
+      serialWriter = serialPort.writable.getWriter();
+
+      document.getElementById('connectBtn').textContent  = 'Disconnect ESP32';
+      document.getElementById('connectBtn').className    = 'connect-btn connected';
+      document.getElementById('serialDot').className     = 'dot green';
+      document.getElementById('serialStatus').textContent = 'Connected!';
+      addLog('Serial connected ✓');
+    } catch (e) {
+      addLog('Connection failed: ' + e.message);
+    }
+  }
+
+  async function disconnectSerial() {
+    try {
+      if (serialWriter) { serialWriter.releaseLock(); serialWriter = null; }
+      if (serialPort)   { await serialPort.close();   serialPort   = null; }
+    } catch(e) {}
+    document.getElementById('connectBtn').textContent   = 'Connect to ESP32';
+    document.getElementById('connectBtn').className     = 'connect-btn';
+    document.getElementById('serialDot').className      = 'dot red';
+    document.getElementById('serialStatus').textContent = 'Disconnected';
+    addLog('Serial disconnected');
+  }
+
+  async function sendCmd(cmd) {
+    if (!serialWriter) return;
+    if (cmd === lastCmd) return;
+    lastCmd = cmd;
+    try {
+      await serialWriter.write(new TextEncoder().encode(cmd));
+      const msg = cmd === '1' ? 'Sent 1 → LED ON' : 'Sent 0 → LED OFF';
+      addLog(msg, cmd === '1' ? 'sent-1' : 'sent-0');
+    } catch(e) {
+      addLog('Send error: ' + e.message);
+    }
+  }
+
+  // ── MediaPipe Hands ────────────────────────────────
+  const videoEl  = document.getElementById('video');
+  const canvasEl = document.getElementById('canvas');
+  const ctx      = canvasEl.getContext('2d');
+
+  function fingersUp(landmarks) {
+    const f = [];
+    // Thumb
+    f.push(landmarks[4].x < landmarks[3].x ? 1 : 0);
+    // 4 fingers
+    [[8,6],[12,10],[16,14],[20,18]].forEach(([tip,pip]) => {
+      f.push(landmarks[tip].y < landmarks[pip].y ? 1 : 0);
+    });
+    return f;
+  }
+
+  const hands = new Hands({
+    locateFile: (file) =>
+      `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+  });
+
+  hands.setOptions({
+    maxNumHands: 1,
+    modelComplexity: 0,       // 0 = fastest
+    minDetectionConfidence: 0.6,
+    minTrackingConfidence: 0.5
+  });
+
+  hands.onResults((results) => {
+    canvasEl.width  = videoEl.videoWidth  || 640;
+    canvasEl.height = videoEl.videoHeight || 480;
+
+    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    ctx.drawImage(results.image, 0, 0);
+
+    const badge = document.getElementById('gestureBadge');
+
+    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+      const lm = results.multiHandLandmarks[0];
+
+      // Draw hand skeleton
+      drawConnectors(ctx, lm, HAND_CONNECTIONS,
+        { color: '#00ff8866', lineWidth: 2 });
+      drawLandmarks(ctx, lm,
+        { color: '#00ff88', lineWidth: 1, radius: 3 });
+
+      const f     = fingersUp(lm);
+      const total = f.reduce((a,b) => a+b, 0);
+
+      if (total >= 4) {
+        setLED(true);
+        sendCmd('1');
+      } else if (total <= 1) {
+        setLED(false);
+        sendCmd('0');
+      } else {
+        badge.textContent = `OTHER (${total} fingers)`;
+        badge.className   = 'gesture-badge';
+      }
+
+    } else {
+      badge.textContent = 'NO HAND DETECTED';
+      badge.className   = 'gesture-badge';
+    }
+  });
+
+  async function startCamera() {
+    if (cameraStarted) return;
+    cameraStarted = true;
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('startBtn').textContent = 'Starting...';
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, facingMode: 'user' }
+      });
+      videoEl.srcObject = stream;
+      await new Promise(r => videoEl.onloadedmetadata = r);
+
+      document.getElementById('camOverlay').classList.add('hidden');
+      document.getElementById('camDot').className     = 'dot green';
+      document.getElementById('camStatus').textContent = 'Running';
+      document.getElementById('startBtn').textContent  = 'Camera On';
+      addLog('Camera started ✓');
+
+      // Use MediaPipe Camera utility for smooth loop
+      const camera = new Camera(videoEl, {
+        onFrame: async () => {
+          await hands.send({ image: videoEl });
+        },
+        width: 640,
+        height: 480
+      });
+      camera.start();
+
+    } catch(e) {
+      addLog('Camera error: ' + e.message);
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('startBtn').textContent = 'Start Camera';
+      cameraStarted = false;
+    }
+  }
+</script>
+</body>
+</html>
+```
